@@ -16,11 +16,13 @@ COPY --from=workspace pyproject.toml uv.lock ./
 # Copy mcp-lms package (from 'workspace' additional_contexts)
 COPY --from=workspace mcp/mcp-lms ./mcp/mcp-lms
 
+# Copy mcp-obs package (from 'workspace' additional_contexts)
+COPY --from=workspace mcp/mcp-obs ./mcp/mcp-obs
+
 # Copy nanobot-websocket-channel packages (from 'workspace' additional_contexts)
 COPY --from=workspace nanobot-websocket-channel ./nanobot-websocket-channel
 
 # Copy nanobot package files (from build context ./nanobot)
-COPY pyproject.toml ./nanobot/pyproject.toml
 COPY entrypoint.py ./nanobot/entrypoint.py
 COPY config.json ./nanobot/config.json
 COPY workspace ./nanobot/workspace/
@@ -32,6 +34,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Install mcp-lms (it's a workspace package, need to install separately)
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install -e /app/mcp/mcp-lms
+
+# Install mcp-obs
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv pip install -e /app/mcp/mcp-obs
 
 # Install mcp-webchat and nanobot-webchat
 RUN --mount=type=cache,target=/root/.cache/uv \
