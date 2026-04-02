@@ -108,6 +108,25 @@ def resolve_config():
             },
         }
 
+    # Task 3C — Observability MCP server for logs and traces
+    victorialogs_url = os.environ.get("NANOBOT_VICTORIALOGS_URL")
+    victoriatraces_url = os.environ.get("NANOBOT_VICTORIATRACES_URL")
+
+    if victorialogs_url or victoriatraces_url:
+        config["tools"]["mcpServers"]["observability"] = {
+            "command": "python",
+            "args": ["-m", "mcp_obs"],
+            "env": {},
+        }
+        if victorialogs_url:
+            config["tools"]["mcpServers"]["observability"]["env"][
+                "VICTORIALOGS_URL"
+            ] = victorialogs_url
+        if victoriatraces_url:
+            config["tools"]["mcpServers"]["observability"]["env"][
+                "VICTORIATRACES_URL"
+            ] = victoriatraces_url
+
     # Write resolved config
     with open(resolved_path, "w") as f:
         json.dump(config, f, indent=2)
