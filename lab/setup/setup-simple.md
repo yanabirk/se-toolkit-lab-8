@@ -269,15 +269,25 @@ docker compose --env-file .env.docker.secret down
 >
 > **Python 3.14 + Docker DNS hang (Qwen proxy times out but `curl` works).**
 >
-> If the Qwen proxy health is OK but LLM calls hang, and `curl https://portal.qwen.ai` works from inside the container but Python doesn't — this is a known Python 3.14 + Docker internal DNS issue. Fix by adding DNS directly to the affected service in `docker-compose.yml`:
+> If the Qwen proxy health is OK but LLM calls hang — this is a Python 3.14 + Docker internal DNS resolver incompatibility. Python's `getaddrinfo` hangs when going through Docker's DNS at `127.0.0.11`, even though `curl` works fine.
+>
+> Fix by switching the `qwen-code-api` service to host networking in `docker-compose.yml`:
 >
 > ```yaml
 > qwen-code-api:
->   dns:
->     - 8.8.8.8
+>   network_mode: host
 > ```
 >
-> Then restart: `docker compose --env-file .env.docker.secret up -d qwen-code-api`
+> Remove `networks: - lms-network` from the same service (`network_mode` and `networks` are mutually exclusive).
+>
+> The proxy will now listen on port **8080** (its container port) instead of 42005. Update `.env.docker.secret`:
+> ```text
+> QWEN_CODE_API_HOST_PORT=8080
+> ```
+>
+> Also update your `nanobot/config.json` to use port 8080 for the Qwen API base URL.
+>
+> Then recreate: `docker compose --env-file .env.docker.secret up -d --force-recreate qwen-code-api`
 >
 > **Docker Hub rate limits (`Too many requests`).**
 >
