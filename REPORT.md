@@ -4,23 +4,173 @@ Paste your checkpoint evidence below. Add screenshots as image files in the repo
 
 ## Task 1A — Bare agent
 
-<!-- Paste the agent's response to "What is the agentic loop?" and "What labs are available in our LMS?" -->
+**Question: "What is the agentic loop?"**
+
+Response:
+
+```
+The agentic loop is the fundamental cycle that autonomous AI agents follow to accomplish tasks. It typically consists of these core stages:
+
+1. Perceive — Gather information from the environment (user input, tool outputs, external data)
+2. Reason — Process the information, plan next steps, make decisions
+3. Act — Execute actions using available tools (file operations, API calls, shell commands, etc.)
+4. Observe — Receive feedback from the actions taken (success, failure, new data)
+5. Repeat — Continue the cycle until the goal is achieved or a stopping condition is met
+
+Key Characteristics
+
+- Autonomy: The agent decides what to do next without constant human guidance
+- Tool use: Agents can interact with external systems to accomplish tasks
+- Feedback-driven: Each action's outcome informs the next decision
+- Goal-oriented: The loop continues until the objective is met
+```
+
+**Question: "What labs are available in our LMS?"**
+
+Response (before MCP — agent searched local files):
+
+```
+Based on my exploration of the workspace, here are the available labs in your LMS system:
+
+Required Labs (4 tasks)
+1. Task 1 — Set Up the Agent: Install nanobot, configure Qwen API, add MCP tools, write skill prompt
+2. Task 2 — Deploy and Connect a Web Client: Dockerize nanobot, add WebSocket channel + Flutter chat UI
+3. Task 3 — Give the Agent New Eyes: Explore observability data, write log/trace MCP tools
+4. Task 4 — Diagnose a Failure and Make the Agent Proactive: Investigate a failure, schedule in-chat health checks, fix a planted bug
+
+Optional Labs (1 task)
+1. Task 1 — Add a Telegram Bot Client: Same agent, different interface
+```
+
+Note: The agent searched local repo files and described the lab tasks from documentation. It did NOT return real backend data (as expected for Part A — no MCP yet).
 
 ## Task 1B — Agent with LMS tools
 
-<!-- Paste the agent's response to "What labs are available?" and "Describe the architecture of the LMS system" -->
+**Question: "What labs are available?"**
+
+Response (with MCP — real backend data):
+
+```
+Here are the available labs:
+
+1. Lab 01 – Products, Architecture & Roles
+2. Lab 02 — Run, Fix, and Deploy a Backend Service
+3. Lab 03 — Backend API: Explore, Debug, Implement, Deploy
+4. Lab 04 — Testing, Front-end, and AI Agents
+5. Lab 05 — Data Pipeline and Analytics Dashboard
+6. Lab 06 — Build Your Own Agent
+7. Lab 07 — Build a Client with an AI Coding Agent
+8. lab-08
+```
+
+**Question: "Is the LMS backend healthy?"**
+
+Response:
+
+```
+Yes, the LMS backend is healthy. It currently has 56 items in the system.
+```
+
+**Question: "Which lab has the lowest pass rate?"**
+
+Response (agent chained multiple tool calls):
+
+```
+Based on the completion rates for all labs:
+
+| Lab    | Completion Rate | Passed | Total |
+|--------|-----------------|--------|-------|
+| Lab 01 | 100.0%          | 258    | 258   |
+| Lab 02 | 88.5%           | 131    | 148   |
+| Lab 03 | 89.1%           | 156    | 175   |
+| Lab 04 | 97.2%           | 239    | 246   |
+| Lab 05 | 98.8%           | 247    | 250   |
+| Lab 06 | 98.4%           | 242    | 246   |
+| Lab 07 | 99.6%           | 238    | 239   |
+| Lab 08 | 0.0%            | 0      | 0     |
+
+Lab 02 has the lowest pass rate at 88.5% among labs with actual submissions.
+Note: Lab 08 shows 0.0% but that's because it has no submissions yet (0 total), so it's not a meaningful comparison.
+```
 
 ## Task 1C — Skill prompt
 
-<!-- Paste the agent's response to "Show me the scores" (without specifying a lab) -->
+**Question: "Show me the scores" (without specifying a lab)**
+
+Response (with LMS skill prompt):
+
+```
+Here are the available labs:
+
+1. Lab 01 – Products, Architecture & Roles
+2. Lab 02 — Run, Fix, and Deploy a Backend Service
+3. Lab 03 — Backend API: Explore, Debug, Implement, Deploy
+4. Lab 04 — Testing, Front-end, and AI Agents
+5. Lab 05 — Data Pipeline and Analytics Dashboard
+6. Lab 06 — Build Your Own Agent
+7. Lab 07 — Build a Client with an AI Coding Agent
+8. Lab 08 — lab-08
+
+Which lab would you like to see the scores for? You can specify by number or title.
+```
+
+Note: The agent now asks which lab when the user requests scores without specifying one, following the LMS skill prompt strategy.
 
 ## Task 2A — Deployed agent
 
-<!-- Paste a short nanobot startup log excerpt showing the gateway started inside Docker -->
+Nanobot startup log excerpt showing the gateway started successfully:
+
+```
+nanobot-1  | Starting nanobot gateway with config: /tmp/nanobot.config.resolved.json
+nanobot-1  | Workspace: /app/nanobot/workspace
+nanobot-1  | Using config: /tmp/nanobot.config.resolved.json
+nanobot-1  | Starting nanobot gateway version 0.1.4.post5 on port 18790...
+nanobot-1  | 2026-04-02 18:54:38.675 | INFO | nanobot.channels.manager:_init_channels:58 - WebChat channel enabled
+nanobot-1  | ✓ Channels enabled: webchat
+nanobot-1  | ✓ Heartbeat: every 1800s
+nanobot-1  | 2026-04-02 18:54:41.454 | INFO | nanobot.agent.tools.mcp:connect_mcp_servers:246 - MCP server 'lms': connected, 9 tools registered
+nanobot-1  | 2026-04-02 18:54:43.403 | INFO | nanobot.agent.tools.mcp:connect_mcp_servers:246 - MCP server 'webchat': connected, 1 tools registered
+nanobot-1  | 2026-04-02 18:54:43.403 | INFO | nanobot.agent.loop:run:280 - Agent loop started
+```
 
 ## Task 2B — Web client
 
-<!-- Screenshot of a conversation with the agent in the Flutter web app -->
+**WebSocket test:** The WebSocket endpoint at `/ws/chat` responds with real agent responses when called with the correct access key.
+
+**Flutter client:** Accessible at `http://localhost:42002/flutter/` - shows the login screen.
+
+**Test conversation via WebSocket:**
+
+Question: "What labs are available?"
+
+Response:
+
+```
+Here are the available labs:
+
+1. **Lab 01** – Products, Architecture & Roles
+2. **Lab 02** — Run, Fix, and Deploy a Backend Service
+3. **Lab 03** — Backend API: Explore, Debug, Implement, Deploy
+4. **Lab 04** — Testing, Front-end, and AI Agents
+5. **Lab 05** — Data Pipeline and Analytics Dashboard
+6. **Lab 06** — Build Your Own Agent
+7. **Lab 07** — Build a Client with an AI Coding Agent
+8. **Lab 08** — lab-08
+```
+
+The agent answered with real LMS/backend data via the WebSocket channel.
+
+**Question: "How is the backend doing?"**
+
+Response (via WebSocket):
+
+```
+The LMS backend is healthy. It currently has 56 items in the system.
+```
+
+**Question: "Show me the scores"** (without specifying a lab)
+
+Response: The agent asks which lab you want to see scores for, listing all available labs as options. This is the structured UI behavior from the LMS skill prompt working with the shared structured-ui skill.
 
 ## Task 3A — Structured logging
 
