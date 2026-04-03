@@ -23,6 +23,7 @@ COPY --from=workspace mcp/mcp-obs ./mcp/mcp-obs
 COPY --from=workspace nanobot-websocket-channel ./nanobot-websocket-channel
 
 # Copy nanobot package files (from build context ./nanobot)
+COPY pyproject.toml ./nanobot/pyproject.toml
 COPY entrypoint.py ./nanobot/entrypoint.py
 COPY config.json ./nanobot/config.json
 COPY workspace ./nanobot/workspace/

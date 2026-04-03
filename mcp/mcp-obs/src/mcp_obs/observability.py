@@ -52,11 +52,16 @@ async def _logs_search(args: LogsSearchQuery, base_url: str) -> ToolPayload:
 
     url = f"{base_url}/select/logsql/query"
     params = {"query": args.query, "limit": args.limit}
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(url, params=params, timeout=30.0)
-        resp.raise_for_status()
-        lines = resp.text.strip().split("\n")
-        return [json.loads(line) for line in lines if line.strip()]
+    try:
+        with httpx.Client() as client:
+            resp = client.get(url, params=params, timeout=30.0)
+            resp.raise_for_status()
+            if not resp.text.strip():
+                return {"count": 0, "query": args.query, "message": "No logs found"}
+            lines = resp.text.strip().split("\n")
+            return [json.loads(line) for line in lines if line.strip()]
+    except Exception as e:
+        return {"error": str(e), "query": args.query, "url": url}
 
 
 async def _logs_error_count(args: LogsErrorCountQuery, base_url: str) -> ToolPayload:
@@ -66,17 +71,27 @@ async def _logs_error_count(args: LogsErrorCountQuery, base_url: str) -> ToolPay
     query = f'_time:{args.minutes}m service.name:"{args.service}" severity:ERROR'
     url = f"{base_url}/select/logsql/query"
     params = {"query": query, "limit": 1000}
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(url, params=params, timeout=30.0)
-        resp.raise_for_status()
-        lines = resp.text.strip().split("\n")
-        logs = [json.loads(line) for line in lines if line.strip()]
-        return {
-            "count": len(logs),
-            "service": args.service,
-            "window_minutes": args.minutes,
-            "sample_logs": logs[:5],
-        }
+    try:
+        with httpx.Client() as client:
+            resp = client.get(url, params=params, timeout=30.0)
+            resp.raise_for_status()
+            if not resp.text.strip():
+                return {
+                    "count": 0,
+                    "service": args.service,
+                    "window_minutes": args.minutes,
+                    "message": "No errors found",
+                }
+            lines = resp.text.strip().split("\n")
+            logs = [json.loads(line) for line in lines if line.strip()]
+            return {
+                "count": len(logs),
+                "service": args.service,
+                "window_minutes": args.minutes,
+                "sample_logs": logs[:5],
+            }
+    except Exception as e:
+        return {"error": str(e), "service": args.service, "query": query}
 
 
 async def _traces_list(args: TracesListQuery, base_url: str) -> ToolPayload:
@@ -85,11 +100,14 @@ async def _traces_list(args: TracesListQuery, base_url: str) -> ToolPayload:
 
     url = f"{base_url}/select/jaeger/api/traces"
     params = {"service": args.service, "limit": args.limit}
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(url, params=params, timeout=30.0)
-        resp.raise_for_status()
-        data = resp.json()
-        return data.get("data", [])
+    try:
+        with httpx.Client() as client:
+            resp = client.get(url, params=params, timeout=30.0)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("data", [])
+    except Exception as e:
+        return {"error": str(e), "service": args.service, "url": url}
 
 
 async def _traces_get(args: TracesGetQuery, base_url: str) -> ToolPayload:
@@ -97,11 +115,14 @@ async def _traces_get(args: TracesGetQuery, base_url: str) -> ToolPayload:
     import httpx
 
     url = f"{base_url}/select/jaeger/api/traces/{args.trace_id}"
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(url, timeout=30.0)
-        resp.raise_for_status()
-        data = resp.json()
-        return data.get("data", [{}])[0] if data.get("data") else {}
+    try:
+        with httpx.Client() as client:
+            resp = client.get(url, timeout=30.0)
+            resp.raise_for_status()
+            data = resp.json()
+            return data.get("data", [{}])[0] if data.get("data") else {}
+    except Exception as e:
+        return {"error": str(e), "trace_id": args.trace_id, "url": url}
 
 
 # Tool handlers mapping - uses partial application for base_url
