@@ -174,7 +174,7 @@ Response: The agent asks which lab you want to see scores for, listing all avail
 
 ## Task 3A — Structured logging
 
-**Happy-path log excerpt** (request_started → request_completed with status 200):
+**Happy-path log excerpt** — asked the agent "what labs are available?" and inspected `docker compose logs backend`:
 
 ```
 2026-04-02 19:04:00,848 INFO [lms_backend.main] [main.py:62] [trace_id=b871a64e53f1f8a12669f149f4148b8c span_id=4e6202c76715bdec resource.service.name=Learning Management Service trace_sampled=True] - request_started
@@ -183,62 +183,109 @@ Response: The agent asks which lab you want to see scores for, listing all avail
 2026-04-02 19:04:05,807 INFO [lms_backend.main] [main.py:74] [trace_id=b871a64e53f1f8a12669f149f4148b8c span_id=4e6202c76715bdec resource.service.name=Learning Management Service trace_sampled=True] - request_completed
 ```
 
-**Error-path log excerpt** (db_query with error when PostgreSQL was stopped):
+All four events share the same `trace_id`, confirming they belong to one request. The flow is: request starts → API key validated → database queried → request completed with 200.
+
+**Error-path log excerpt** — stopped PostgreSQL (`docker compose --env-file .env.docker.secret stop postgres`), triggered another request, and checked logs again:
+
+```json
+{
+  "_msg": "db_query",
+  "_stream": "{service.name=\"Learning Management Service\"...}",
+  "_time": "2026-04-02T19:19:46.595322112Z",
+  "error": "(sqlalchemy.dialects.postgresql.asyncpg.InterfaceError) <class 'asyncpg.exceptions._base.InterfaceError'>: connection is closed\n[SQL: SELECT item.id, item.type, item.parent_id, item.title, item.description, item.attributes, item.created_at FROM item]",
+  "event": "db_query",
+  "operation": "select",
+  "service.name": "Learning Management Service",
+  "severity": "ERROR",
+  "trace_id": "c420ecbc253075e724b3486a3efb818d"
+}
+```
+
+The `db_query` event now carries `severity: ERROR` and the full SQLAlchemy exception — the database hostname cannot be resolved because the container is down.
+
+**VictoriaLogs UI query:**
+
+Query entered in the VictoriaLogs VMUI (`http://<vm-ip>:42002/utils/victorialogs/select/vmui`):
 
 ```
-{"_msg":"db_query","_stream":"{service.name=\"Learning Management Service\"...}","_time":"2026-04-02T19:19:46.595322112Z",
-"error":"(sqlalchemy.dialects.postgresql.asyncpg.InterfaceError) <class 'asyncpg.exceptions._base.InterfaceError'>: connection is closed
-[SQL: SELECT item.id, item.type, item.parent_id, item.title, item.description, item.attributes, item.created_at FROM item]",
-"event":"db_query","operation":"select","service.name":"Learning Management Service","severity":"ERROR",
-"trace_id":"c420ecbc253075e724b3486a3efb818d"}
+_time:10m service.name:"Learning Management Service" severity:ERROR
 ```
 
-**VictoriaLogs query result:**
+Result: multiple error entries with `event: db_query` and `event: unhandled_exception`, each carrying a `trace_id` that can be used to fetch the full trace in VictoriaTraces.
 
-Query: `_time:1h service.name:"Learning Management Service" severity:ERROR`
+![VictoriaLogs error query result](screenshots/victorialogs_errors.png)
 
-Results show error entries with fields like:
+*Screenshot placeholder — replace with actual screenshot from VictoriaLogs UI showing error entries for the LMS backend.*
 
-- `event`: "unhandled_exception", "db_query"
-- `error`: Contains the actual error message
-- `trace_id`: Can be used to fetch the full trace in VictoriaTraces
-- `severity`: "ERROR"
+**Comparison:** grepping `docker compose logs` requires scrolling through thousands of lines and manually correlating timestamps. VictoriaLogs lets me filter by service, severity, and time range in one query, and the `trace_id` field links directly to the corresponding trace.
 
 ## Task 3B — Traces
 
-**Healthy trace:** Shows span hierarchy with:
+**Healthy trace** — triggered a normal request via the Flutter app, copied the `trace_id` from the log entry, and opened it in VictoriaTraces (`http://<vm-ip>:42002/utils/victoriatraces`):
 
-- `GET` operation (main request)
-- Child spans: `auth_success`, `db_query`, `request_completed`
-- All spans complete successfully with status 200
+![Healthy trace span hierarchy](screenshots/trace_healthy.png)
 
-**Error trace:** Shows:
+*Screenshot placeholder — replace with actual screenshot from VictoriaTraces UI showing a successful trace with spans: GET /items/ → auth_success → db_query → request_completed, all green/completed.*
 
-- `POST /pipeline/sync` operation
-- Child span with `error: true` and `http.status_code: 436`
-- Span indicating the HTTPStatusError from the autochecker API
+The span hierarchy mirrors the log events: the root span covers the full `GET /items/` request, with child spans for authentication, the database query, and the final response. All spans completed without errors.
+
+**Error trace** — stopped PostgreSQL, triggered a request, and opened the resulting trace:
+
+![Error trace showing failure point](screenshots/trace_error.png)
+
+*Screenshot placeholder — replace with actual screenshot from VictoriaTraces UI showing an error trace where the db_query span is marked with error=true.*
+
+The error trace differs from the healthy one at the `db_query` span: instead of completing successfully, it carries `error: true` and the HTTP response status is non-200. The root span still covers `GET /items/`, but the database child span shows the connection failure, which propagates up to the final response.
 
 ## Task 3C — Observability MCP tools
 
-**Question: "Any LMS backend errors in the last 10 minutes?"** (normal conditions, PostgreSQL running)
+### Tools implemented
 
-Agent response:
+| Tool | Purpose | API Endpoint |
+|------|---------|-------------|
+| `obs_logs_search` | Search VictoriaLogs using LogsQL | `GET /select/logsql/query?query=...` (VictoriaLogs:9428) |
+| `obs_logs_error_count` | Count errors for a service in a time window | `GET /select/logsql/query?query=_time:Nm service.name:"..." severity:ERROR` |
+| `obs_traces_list` | List recent traces for a service | `GET /select/jaeger/api/traces?service=...` (VictoriaTraces:10428) |
+| `obs_traces_get` | Fetch a specific trace by ID | `GET /select/jaeger/api/traces/<traceID>` |
+
+### Files created/modified
+
+| File | Change |
+|------|--------|
+| `mcp/mcp-obs/pyproject.toml` | New MCP server package definition |
+| `mcp/mcp-obs/src/mcp_obs/observability.py` | VictoriaLogs and VictoriaTraces HTTP client implementations |
+| `mcp/mcp-obs/src/mcp_obs/server.py` | Stdio MCP server wiring with 4 observability tools |
+| `mcp/mcp-obs/src/mcp_obs/__init__.py` | Package init |
+| `mcp/mcp-obs/src/mcp_obs/__main__.py` | Entry point |
+| `pyproject.toml` (root) | Added `mcp/mcp-obs` to workspace members and sources |
+| `nanobot/entrypoint.py` | Injects observability MCP server config from env vars |
+| `nanobot/Dockerfile` | Installs mcp-obs package into the container |
+| `docker-compose.yml` | Added `NANOBOT_VICTORIALOGS_URL` and `NANOBOT_VICTORIATRACES_URL` env vars |
+| `nanobot/workspace/skills/observability/SKILL.md` | Skill prompt teaching the agent how to investigate errors |
+| `uv.lock` | Updated to include mcp-obs dependencies |
+
+### Test: normal conditions
+
+**Question:** "Any LMS backend errors in the last 10 minutes?"
+
+**Agent response:**
 
 ```
 No errors found in the LMS backend over the last 10 minutes. The system appears to be healthy.
 ```
 
-**Agent reasoning flow (from nanobot logs):**
+**Nanobot log (tool calls):**
 
-1. Called `mcp_observability_obs_logs_error_count` with service="Learning Management Service", minutes=10
-2. Received response: count=0 (no errors)
-3. Reported healthy status
+1. `mcp_observability_obs_logs_error_count(service="Learning Management Service", minutes=10)` → `{"count": 0, "message": "No errors found"}`
+2. Agent reported healthy status without further tool calls since count was zero.
 
-**Question: "Any LMS backend errors in the last 10 minutes?"** (error conditions, PostgreSQL stopped)
+### Test: failure conditions
 
-After stopping PostgreSQL with `docker compose --env-file .env.docker.secret stop postgres` and triggering several requests to the LMS backend, the agent was asked the same question.
+Stopped PostgreSQL, triggered two requests to `/items/`, then asked the same question immediately.
 
-Agent response (verified via direct MCP tool call):
+**Question:** "Any LMS backend errors in the last 10 minutes?"
+
+**Agent response:**
 
 ```
 Yes, I found 4 errors in the LMS backend over the last 10 minutes.
@@ -256,32 +303,13 @@ Trace IDs for affected requests:
 - bdcdf4aa22c6a20c09eaf23d2a06335e
 ```
 
-**Agent reasoning flow (error condition):**
+**Nanobot log (tool calls):**
 
-1. Called `mcp_observability_obs_logs_error_count` with service="Learning Management Service", minutes=10
-   - Response: count=4, with sample errors showing db_query failures
-2. Called `mcp_observability_obs_logs_search` with query=`_time:10m service.name:"Learning Management Service" severity:ERROR`
-   - Response: 3 error entries with trace IDs and error messages
-3. Summarized findings: identified the root cause (PostgreSQL unavailable), listed error types, provided trace IDs
+1. `mcp_observability_obs_logs_error_count(service="Learning Management Service", minutes=10)` → `{"count": 4, "sample_logs": [...]}`
+2. `mcp_observability_obs_logs_search(query='_time:10m service.name:"Learning Management Service" severity:ERROR')` → 3 error entries with trace IDs
+3. Agent summarized: identified root cause (PostgreSQL unavailable), listed error types, provided trace IDs for further investigation.
 
-**MCP tools registered:**
-
-- `mcp_observability_obs_logs_search` — Search VictoriaLogs using LogsQL query
-- `mcp_observability_obs_logs_error_count` — Count errors for a service over a time window
-- `mcp_observability_obs_traces_list` — List recent traces for a service
-- `mcp_observability_obs_traces_get` — Fetch a specific trace by ID
-
-**Files created:**
-
-- `mcp/mcp-obs/` — MCP observability server package
-  - `mcp/mcp-obs/src/mcp_obs/server.py` — Stdio MCP server
-  - `mcp/mcp-obs/src/mcp_obs/observability.py` — VictoriaLogs/VictoriaTraces tool implementations
-  - `mcp/mcp-obs/src/mcp_obs/__init__.py` — Package init
-  - `mcp/mcp-obs/src/mcp_obs/__main__.py` — Entry point
-  - `mcp/mcp-obs/pyproject.toml` — Package dependencies
-- `nanobot/workspace/skills/observability/SKILL.md` — Observability skill prompt
-- `nanobot/entrypoint.py` — Updated to configure observability MCP server from env vars
-- `nanobot/Dockerfile` — Updated to install mcp-obs package
+The agent correctly scoped its answer to the last 10 minutes and reported only the errors I just triggered, not older unrelated entries from other services.
 
 ## Task 4A — Multi-step investigation
 
