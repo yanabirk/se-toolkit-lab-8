@@ -57,8 +57,16 @@ def create_server(logs_url: str, traces_url: str) -> Server:
 
 
 async def main(logs_url: str | None = None, traces_url: str | None = None) -> None:
-    logs_url = logs_url or "http://localhost:9428"
-    traces_url = traces_url or "http://localhost:10428"
+    import os
+
+    # Read from environment variables or use defaults
+    logs_url = logs_url or os.environ.get(
+        "VICTORIALOGS_URL", "http://victorialogs:9428"
+    )
+    traces_url = traces_url or os.environ.get(
+        "VICTORIATRACES_URL", "http://victoriatraces:10428"
+    )
+
     server = create_server(logs_url, traces_url)
     async with stdio_server() as (read_stream, write_stream):
         init_options = server.create_initialization_options()
